@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 import pandas as pd
 import streamlit as st
 import yfinance as yf
+from pandas import DataFrame
 
 st.set_page_config(page_title="Daily Stock Checklist", page_icon="📈", layout="wide")
 
@@ -37,11 +38,11 @@ METRIC_DEFINITIONS = {
     "Pullback %": "Percent drop from the 52-week high, calculated as (52W High - Price) / 52W High. A larger pullback can mean a more interesting entry, but only if the business is still strong.",
     "P/E": "Trailing price-to-earnings ratio using the last 12 months of earnings. Lower can mean cheaper, but fast-growing stocks often trade at higher P/E ratios.",
     "Forward P/E": "Price relative to expected future earnings based on analyst estimates. Often more useful for growth stocks than trailing P/E.",
-    "Revenue Growth %": "Year-over-year growth in sales, not month-over-month. Above 20% is strong, 10-20% is solid, and below 5% is slow.",
-    "Earnings Growth %": "Year-over-year growth in profit. Revenue growth without earnings growth can be less durable.",
-    "Profit Margin %": "Net profit as a percent of revenue. Higher means the company keeps more profit from each dollar of sales.",
-    "Operating Margin %": "Operating profit as a percent of revenue. Helps compare the strength of the core business across companies.",
-    "ROE %": "Return on equity. Shows how efficiently management uses shareholder capital. Above 15% is often considered strong.",
+    "Revenue Growth %": "A year-by-year history built from annual financial statements. Format is newest comparison first, like +25.0% (1Y 2026 vs 2025) | -40.0% (2Y 2025 vs 2024).",
+    "Earnings Growth %": "A year-by-year history of net income growth from annual financial statements, shown in the same format as revenue growth.",
+    "Profit Margin %": "Net profit margin history by year, shown as annual values in a newest-first timeline like +22.4% (1Y 2026) | +18.1% (2Y 2025).",
+    "Operating Margin %": "Operating margin history by year, shown as annual values in the same newest-first timeline format when available.",
+    "ROE %": "Return on equity by year, shown as annual values in the same newest-first timeline format when available.",
     "Debt to Equity": "Debt relative to shareholder equity. Lower is usually safer. Under 50 is low, 50-120 is moderate, above 120 is heavy leverage.",
     "Checklist Score": "A simple composite score based on growth, profitability, debt, valuation, and pullback.",
     "Rating": "Quick label based on the checklist score: Strong, Good, Mixed, or Weak.",
@@ -101,10 +102,115 @@ def color_metric(val: Any, column: str) -> str:
     if val is None or val == "N/A" or (isinstance(val, float) and math.isnan(val)):
         return "background-color: #f3f4f6; color: #6b7280"
 
+    if isinstance(val, str) and "|" in val:
+        first_part = val.split("|")[0].strip()
+        try:
+            num = float(first_part.split("%", 1)[0].replace("+", "").strip())
+        except Exception:
+            return ""
+    else:
+        try:
+            num = float(val)
+        except Exception:
+            return ""
+
+    if column in ["Revenue Growth %", "Earnings Growth %"]:
+        if num >= 20:
+            return "background-color: #dcfce7; color: #166534"
+        if num >= 8:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column in ["Profit Margin %", "Operating Margin %", "ROE %"]:
+        if num >= 20:
+            return "background-color: #dcfce7; color: #166534"
+        if num >= 8:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column == "Debt to Equity":
+        if num < 50:
+            return "background-color: #dcfce7; color: #166534"
+        if num < 120:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column in ["P/E", "Forward P/E"]:
+        if num < 20:
+            return "background-color: #dcfce7; color: #166534"
+        if num < 35:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column == "Pullback %":
+        if num >= 20:
+            return "background-color: #dcfce7; color: #166534"
+        if num >= 8:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column == "Checklist Score":
+        if num >= 22:
+            return "background-color: #dcfce7; color: #166534"
+        if num >= 16:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    return ""
+
+
+def _safe_div(a: Any, b: Any) -> Any:
     try:
-        num = float(val)
+        if a is None or b in (None, 0):
+            return None
+        return a / b
     except Exception:
-        return ""
+        return None
+
+
+def _build_series_from_financials(fin: DataFrame, row_name: str) -> Dict[str, Any]:
+    if fin is None or fin.empty or row_name not in fin.index:
+        return {}
+    series = fin.loc[row_name]
+    data = {}
+    for col, val in series.items():
+        try:
+            year = pd.to_datetime(col).year
+        except Exception:
+            continue
+        num = safe_num(val)
+        if num is not None:
+            data[str(year)] = num
+    return dict(sorted(data.items(), reverse=True))
+
+
+def _build_growth_history(year_map: Dict[str, Any], periods: int = 5) -> str:
+    years = list(year_map.keys())
+    vals = list(year_map.values())
+    parts = []
+    for i in range(min(periods, len(vals) - 1)):
+        curr = vals[i]
+        prev = vals[i + 1]
+        curr_year = years[i]
+        prev_year = years[i + 1]
+        if prev in (None, 0):
+            continue
+        growth = ((curr - prev) / abs(prev)) * 100
+        label = f"{i + 1}Y {curr_year} vs {prev_year}"
+        parts.append(f"{growth:+.1f}% ({label})")
+    return " | ".join(parts) if parts else "N/A"
+
+
+def _build_margin_history(year_map_num: Dict[str, Any], year_map_den: Dict[str, Any], periods: int = 5) -> str:
+    common_years = [y for y in year_map_num.keys() if y in year_map_den]
+    common_years = sorted(common_years, reverse=True)
+    parts = []
+    for i, year in enumerate(common_years[:periods]):
+        ratio = _safe_div(year_map_num.get(year), year_map_den.get(year))
+        if ratio is None:
+            continue
+        parts.append(f"{ratio * 100:+.1f}% ({i + 1}Y {year})")
+    return " | ".join(parts) if parts else "N/A"
 
     if column in ["Revenue Growth %", "Earnings Growth %"]:
         if num >= 20:
@@ -161,35 +267,70 @@ def fetch_one(ticker: str) -> Dict[str, Any]:
     low_52w = safe_num(info.get("fiftyTwoWeekLow"))
     pe = safe_num(info.get("trailingPE"))
     fwd_pe = safe_num(info.get("forwardPE"))
-    revenue_growth = safe_pct_from_decimal(info.get("revenueGrowth"))
-    earnings_growth = safe_pct_from_decimal(info.get("earningsGrowth"))
-    profit_margin = safe_pct_from_decimal(info.get("profitMargins"))
-    operating_margin = safe_pct_from_decimal(info.get("operatingMargins"))
     debt_to_equity = safe_num(info.get("debtToEquity"))
-    roe = safe_pct_from_decimal(info.get("returnOnEquity"))
-    market_cap = safe_num(info.get("marketCap"))
     beta = safe_num(info.get("beta"))
     analyst_target = safe_num(info.get("targetMeanPrice"))
+    market_cap = safe_num(info.get("marketCap"))
+
+    try:
+        financials = tk.financials
+    except Exception:
+        financials = pd.DataFrame()
+    try:
+        balance_sheet = tk.balance_sheet
+    except Exception:
+        balance_sheet = pd.DataFrame()
+
+    revenue_map = _build_series_from_financials(financials, "Total Revenue")
+    net_income_map = _build_series_from_financials(financials, "Net Income")
+    operating_income_map = _build_series_from_financials(financials, "Operating Income")
+    equity_map = _build_series_from_financials(balance_sheet, "Stockholders Equity")
+
+    revenue_growth_latest = None
+    if len(revenue_map) >= 2:
+        vals = list(revenue_map.values())
+        if vals[1] not in (None, 0):
+            revenue_growth_latest = round(((vals[0] - vals[1]) / abs(vals[1])) * 100, 2)
+
+    earnings_growth_latest = None
+    if len(net_income_map) >= 2:
+        vals = list(net_income_map.values())
+        if vals[1] not in (None, 0):
+            earnings_growth_latest = round(((vals[0] - vals[1]) / abs(vals[1])) * 100, 2)
+
+    revenue_growth_history = _build_growth_history(revenue_map, periods=5)
+    earnings_growth_history = _build_growth_history(net_income_map, periods=5)
+    profit_margin_history = _build_margin_history(net_income_map, revenue_map, periods=5)
+    operating_margin_history = _build_margin_history(operating_income_map, revenue_map, periods=5)
+    roe_history = _build_margin_history(net_income_map, equity_map, periods=5)
 
     pullback = pct_pullback(high_52w, price)
     upside_to_target = None
     if price and analyst_target and price != 0:
         upside_to_target = round(((analyst_target - price) / price) * 100, 2)
 
-    if revenue_growth is None:
+    if revenue_growth_latest is None:
         growth_bucket = "N/A"
-    elif revenue_growth >= 20:
+    elif revenue_growth_latest >= 20:
         growth_bucket = "High"
-    elif revenue_growth >= 8:
+    elif revenue_growth_latest >= 8:
         growth_bucket = "Moderate"
     else:
         growth_bucket = "Low"
 
-    if profit_margin is None:
+    latest_profit_margin = None
+    common_rev_years = [y for y in net_income_map.keys() if y in revenue_map]
+    if common_rev_years:
+        y = sorted(common_rev_years, reverse=True)[0]
+        ratio = _safe_div(net_income_map.get(y), revenue_map.get(y))
+        if ratio is not None:
+            latest_profit_margin = round(ratio * 100, 2)
+
+    if latest_profit_margin is None:
         profitability_bucket = "N/A"
-    elif profit_margin >= 20:
+    elif latest_profit_margin >= 20:
         profitability_bucket = "High"
-    elif profit_margin >= 8:
+    elif latest_profit_margin >= 8:
         profitability_bucket = "Medium"
     else:
         profitability_bucket = "Low"
@@ -207,12 +348,10 @@ def fetch_one(ticker: str) -> Dict[str, Any]:
     short_summary = summary[:220] + "..." if len(summary) > 220 else summary
 
     notes = []
-    if revenue_growth is not None:
-        notes.append(f"Revenue growth {revenue_growth}%")
-    if earnings_growth is not None:
-        notes.append(f"Earnings growth {earnings_growth}%")
-    if profit_margin is not None:
-        notes.append(f"Profit margin {profit_margin}%")
+    if revenue_growth_history != "N/A":
+        notes.append(f"Revenue: {revenue_growth_history}")
+    if earnings_growth_history != "N/A":
+        notes.append(f"Earnings: {earnings_growth_history}")
     if pullback is not None:
         notes.append(f"{pullback}% below 52W high")
 
@@ -226,11 +365,14 @@ def fetch_one(ticker: str) -> Dict[str, Any]:
         "Pullback %": pullback,
         "P/E": round(pe, 2) if pe is not None else None,
         "Forward P/E": round(fwd_pe, 2) if fwd_pe is not None else None,
-        "Revenue Growth %": revenue_growth,
-        "Earnings Growth %": earnings_growth,
-        "Profit Margin %": profit_margin,
-        "Operating Margin %": operating_margin,
-        "ROE %": roe,
+        "Revenue Growth %": revenue_growth_history,
+        "Earnings Growth %": earnings_growth_history,
+        "Profit Margin %": profit_margin_history,
+        "Operating Margin %": operating_margin_history,
+        "ROE %": roe_history,
+        "Revenue Growth Latest": revenue_growth_latest,
+        "Earnings Growth Latest": earnings_growth_latest,
+        "Profit Margin Latest": latest_profit_margin,
         "Debt to Equity": round(debt_to_equity, 2) if debt_to_equity is not None else None,
         "Market Cap": market_cap,
         "Beta": round(beta, 2) if beta is not None else None,
@@ -268,8 +410,8 @@ def fetch_all(tickers: List[str]) -> pd.DataFrame:
 def score_stock(row: pd.Series) -> int:
     score = 0
 
-    rev = row.get("Revenue Growth %")
-    margin = row.get("Profit Margin %")
+    rev = row.get("Revenue Growth Latest")
+    margin = row.get("Profit Margin Latest")
     debt = row.get("Debt to Equity")
     pe = row.get("P/E")
     pullback = row.get("Pullback %")
@@ -302,7 +444,7 @@ def rating_label(score: int) -> str:
 
 def signal_from_rules(row: pd.Series, max_pe: float, min_growth: float, min_pullback: float) -> str:
     pe = row.get("P/E")
-    growth = row.get("Revenue Growth %")
+    growth = row.get("Revenue Growth Latest")
     pullback = row.get("Pullback %")
 
     pe_ok = isinstance(pe, (int, float)) and pe <= max_pe
@@ -495,9 +637,11 @@ with tab2:
     with right:
         st.write("**Extra metrics**")
         st.markdown(f"- Market cap: **{format_large_number(row.get('Market Cap'))}**")
-        st.markdown(f"- Profit margin: **{row.get('Profit Margin %') if row.get('Profit Margin %') is not None else 'N/A'}%**")
-        st.markdown(f"- Operating margin: **{row.get('Operating Margin %') if row.get('Operating Margin %') is not None else 'N/A'}%**")
-        st.markdown(f"- ROE: **{row.get('ROE %') if row.get('ROE %') is not None else 'N/A'}%**")
+        st.markdown(f"- Revenue growth history: **{row.get('Revenue Growth %') if row.get('Revenue Growth %') is not None else 'N/A'}**")
+        st.markdown(f"- Earnings growth history: **{row.get('Earnings Growth %') if row.get('Earnings Growth %') is not None else 'N/A'}**")
+        st.markdown(f"- Profit margin history: **{row.get('Profit Margin %') if row.get('Profit Margin %') is not None else 'N/A'}**")
+        st.markdown(f"- Operating margin history: **{row.get('Operating Margin %') if row.get('Operating Margin %') is not None else 'N/A'}**")
+        st.markdown(f"- ROE history: **{row.get('ROE %') if row.get('ROE %') is not None else 'N/A'}**")
         st.markdown(f"- Debt to equity: **{row.get('Debt to Equity') if row.get('Debt to Equity') is not None else 'N/A'}**")
         st.markdown(f"- Analyst target: **{row.get('Analyst Target') if row.get('Analyst Target') is not None else 'N/A'}**")
         st.markdown(f"- Upside to target: **{row.get('Upside to Target %') if row.get('Upside to Target %') is not None else 'N/A'}%**")
