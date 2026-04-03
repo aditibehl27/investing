@@ -300,11 +300,11 @@ METRIC_DEFINITIONS = {
     "Checklist Score": "Composite score combining growth, profitability, debt, valuation, and pullback. Higher score = stronger overall setup.",
     "Rating": "Quick label based on score: Strong, Good, Mixed, Weak.",
 
-    "Signal": "Decision helper based on YOUR rules (P/E, growth, pullback). 
+    "Signal": """Decision helper based on YOUR rules (P/E, growth, pullback).
 - Buy zone = meets all conditions
 - Watch = close but not perfect
 - Quality = strong company but maybe expensive
-- Needs review = weaker setup",
+- Needs review = weaker setup"""
 }
 
 def metric_legend_df() -> pd.DataFrame:
