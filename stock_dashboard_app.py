@@ -30,6 +30,24 @@ DEFAULT_NOTES = {
     "MU": "Cyclical memory play.",
 }
 
+METRIC_DEFINITIONS = {
+    "Price": "Latest market price from Yahoo Finance. This is the stock's current trading price.",
+    "52W High": "Highest price reached in the past 12 months. Useful as a reference point for momentum and previous peaks.",
+    "52W Low": "Lowest price reached in the past 12 months. Helps you understand downside range.",
+    "Pullback %": "Percent drop from the 52-week high, calculated as (52W High - Price) / 52W High. A larger pullback can mean a more interesting entry, but only if the business is still strong.",
+    "P/E": "Trailing price-to-earnings ratio using the last 12 months of earnings. Lower can mean cheaper, but fast-growing stocks often trade at higher P/E ratios.",
+    "Forward P/E": "Price relative to expected future earnings based on analyst estimates. Often more useful for growth stocks than trailing P/E.",
+    "Revenue Growth %": "Year-over-year growth in sales, not month-over-month. Above 20% is strong, 10-20% is solid, and below 5% is slow.",
+    "Earnings Growth %": "Year-over-year growth in profit. Revenue growth without earnings growth can be less durable.",
+    "Profit Margin %": "Net profit as a percent of revenue. Higher means the company keeps more profit from each dollar of sales.",
+    "Operating Margin %": "Operating profit as a percent of revenue. Helps compare the strength of the core business across companies.",
+    "ROE %": "Return on equity. Shows how efficiently management uses shareholder capital. Above 15% is often considered strong.",
+    "Debt to Equity": "Debt relative to shareholder equity. Lower is usually safer. Under 50 is low, 50-120 is moderate, above 120 is heavy leverage.",
+    "Checklist Score": "A simple composite score based on growth, profitability, debt, valuation, and pullback.",
+    "Rating": "Quick label based on the checklist score: Strong, Good, Mixed, or Weak.",
+    "Signal": "Decision helper based on your rules for P/E, growth, and pullback. Buy zone means all conditions are met. Watch closely means some good signs are present. Quality, maybe wait means the business may be strong but the setup is not ideal yet. Needs review means the setup is weaker.",
+}
+
 
 def safe_num(value: Any) -> Any:
     if value is None:
@@ -39,11 +57,13 @@ def safe_num(value: Any) -> Any:
     return value
 
 
+
 def safe_pct_from_decimal(value: Any) -> Any:
     value = safe_num(value)
     if value is None:
         return None
     return round(value * 100, 2)
+
 
 
 def pct_pullback(high: Any, current: Any) -> Any:
@@ -52,6 +72,7 @@ def pct_pullback(high: Any, current: Any) -> Any:
     if not high or not current or high == 0:
         return None
     return round(((high - current) / high) * 100, 2)
+
 
 
 def format_large_number(value: Any) -> str:
@@ -66,6 +87,68 @@ def format_large_number(value: Any) -> str:
     if abs_val >= 1_000_000:
         return f"${value/1_000_000:.2f}M"
     return f"${value:,.0f}"
+
+
+
+def metric_legend_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        [{"Metric": k, "What it means": v} for k, v in METRIC_DEFINITIONS.items()]
+    )
+
+
+
+def color_metric(val: Any, column: str) -> str:
+    if val is None or val == "N/A" or (isinstance(val, float) and math.isnan(val)):
+        return "background-color: #f3f4f6; color: #6b7280"
+
+    try:
+        num = float(val)
+    except Exception:
+        return ""
+
+    if column in ["Revenue Growth %", "Earnings Growth %"]:
+        if num >= 20:
+            return "background-color: #dcfce7; color: #166534"
+        if num >= 8:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column in ["Profit Margin %", "Operating Margin %", "ROE %"]:
+        if num >= 20:
+            return "background-color: #dcfce7; color: #166534"
+        if num >= 8:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column == "Debt to Equity":
+        if num < 50:
+            return "background-color: #dcfce7; color: #166534"
+        if num < 120:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column in ["P/E", "Forward P/E"]:
+        if num < 20:
+            return "background-color: #dcfce7; color: #166534"
+        if num < 35:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column == "Pullback %":
+        if num >= 20:
+            return "background-color: #dcfce7; color: #166534"
+        if num >= 8:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column == "Checklist Score":
+        if num >= 22:
+            return "background-color: #dcfce7; color: #166534"
+        if num >= 16:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    return ""
 
 
 @st.cache_data(ttl=60 * 60 * 24, show_spinner=False)
@@ -181,6 +264,7 @@ def fetch_all(tickers: List[str]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+
 def score_stock(row: pd.Series) -> int:
     score = 0
 
@@ -204,6 +288,7 @@ def score_stock(row: pd.Series) -> int:
     return score
 
 
+
 def rating_label(score: int) -> str:
     if score >= 22:
         return "Strong"
@@ -212,6 +297,7 @@ def rating_label(score: int) -> str:
     if score >= 10:
         return "Mixed"
     return "Weak"
+
 
 
 def signal_from_rules(row: pd.Series, max_pe: float, min_growth: float, min_pullback: float) -> str:
@@ -230,6 +316,7 @@ def signal_from_rules(row: pd.Series, max_pe: float, min_growth: float, min_pull
     if growth_ok:
         return "📌 Quality, maybe wait"
     return "⚠️ Needs review"
+
 
 
 def style_watchlist(df: pd.DataFrame):
@@ -270,101 +357,11 @@ def style_watchlist(df: pd.DataFrame):
     if "Rating" in df.columns:
         styler = styler.map(color_rating, subset=["Rating"])
 
-    styler = styler.set_properties(**{
-        "white-space": "nowrap",
-        "font-size": "13px",
-    })
+    styler = styler.set_properties(**{"white-space": "nowrap", "font-size": "13px"})
     return styler
 
 
 st.title("📈 Daily Stock Checklist")
-
-METRIC_DEFINITIONS = {
-    "Price": "Latest market price from Yahoo Finance. This is what the stock is trading at right now.",
-    "52W High": "Highest price the stock reached in the past 12 months. Used as a reference point for momentum and peaks.",
-    "52W Low": "Lowest price in the past 12 months. Helps understand downside range.",
-    "Pullback %": "Percent drop from 52-week high. Calculated as (High - Current)/High. Larger pullbacks (10–30%) can indicate better entry points IF the business is strong.",
-
-    "P/E": "Trailing Price-to-Earnings ratio (based on last 12 months earnings). Lower can mean cheaper, but high-growth companies often trade at higher P/E.",
-    "Forward P/E": "Price relative to expected future earnings (analyst estimates). Useful for growth stocks where future matters more than past.",
-
-    "Revenue Growth %": "Year-over-Year (YoY) revenue growth, NOT month-over-month. Measures how fast the company’s sales are increasing compared to last year. >20% = strong growth, 10–20% = good, <5% = slow.",
-    "Earnings Growth %": "Year-over-Year (YoY) growth in profits. Important because revenue without profit is not sustainable.",
-
-    "Profit Margin %": "Net profit as a % of revenue. Higher means the company keeps more money from sales. >20% = very strong, 10–20% = good, <5% = weak.",
-    "Operating Margin %": "Profit from core operations before taxes/interest. Helps compare companies across industries.",
-    "ROE %": "Return on Equity. Shows how efficiently a company uses investor money. >15% is generally strong.",
-
-    "Debt to Equity": "Total debt compared to shareholder equity. Lower = safer. <50 = low risk, 50–120 = moderate, >120 = high leverage.",
-
-    "Checklist Score": "Composite score combining growth, profitability, debt, valuation, and pullback. Higher score = stronger overall setup.",
-    "Rating": "Quick label based on score: Strong, Good, Mixed, Weak.",
-
-    "Signal": """Decision helper based on YOUR rules (P/E, growth, pullback).
-- Buy zone = meets all conditions
-- Watch = close but not perfect
-- Quality = strong company but maybe expensive
-- Needs review = weaker setu}]}
-}
-
-def metric_legend_df() -> pd.DataFrame:
-    return pd.DataFrame(
-        [{"Metric": k, "What it means": v} for k, v in METRIC_DEFINITIONS.items()]
-    )
-
-
-def color_metric(val: Any, column: str) -> str:
-    if val is None or val == "N/A" or (isinstance(val, float) and math.isnan(val)):
-        return "background-color: #f3f4f6; color: #6b7280"
-
-    try:
-        num = float(val)
-    except Exception:
-        return ""
-
-    if column in ["Revenue Growth %", "Earnings Growth %"]:
-        if num >= 20:
-            return "background-color: #dcfce7; color: #166534"
-        if num >= 8:
-            return "background-color: #fef9c3; color: #854d0e"
-        return "background-color: #fee2e2; color: #991b1b"
-
-    if column in ["Profit Margin %", "Operating Margin %", "ROE %"]:
-        if num >= 20:
-            return "background-color: #dcfce7; color: #166534"
-        if num >= 8:
-            return "background-color: #fef9c3; color: #854d0e"
-        return "background-color: #fee2e2; color: #991b1b"
-
-    if column == "Debt to Equity":
-        if num < 50:
-            return "background-color: #dcfce7; color: #166534"
-        if num < 120:
-            return "background-color: #fef9c3; color: #854d0e"
-        return "background-color: #fee2e2; color: #991b1b"
-
-    if column in ["P/E", "Forward P/E"]:
-        if num < 20:
-            return "background-color: #dcfce7; color: #166534"
-        if num < 35:
-            return "background-color: #fef9c3; color: #854d0e"
-        return "background-color: #fee2e2; color: #991b1b"
-
-    if column == "Pullback %":
-        if num >= 20:
-            return "background-color: #dcfce7; color: #166534"
-        if num >= 8:
-            return "background-color: #fef9c3; color: #854d0e"
-        return "background-color: #fee2e2; color: #991b1b"
-
-    if column == "Checklist Score":
-        if num >= 22:
-            return "background-color: #dcfce7; color: #166534"
-        if num >= 16:
-            return "background-color: #fef9c3; color: #854d0e"
-        return "background-color: #fee2e2; color: #991b1b"
-
-    return ""
 st.caption("A simple investing dashboard that refreshes from Yahoo Finance and turns your watchlist into a daily checklist.")
 
 with st.sidebar:
@@ -431,18 +428,23 @@ with tab1:
     st.dataframe(legend_df, use_container_width=True, hide_index=True)
 
     st.markdown("**Sources**")
-    st.markdown("""
-- [Yahoo Finance](https://finance.yahoo.com/) for price, valuation, and company fundamentals  
-- [yfinance Python library](https://pypi.org/project/yfinance/) for pulling Yahoo Finance data into the app  
+    st.markdown(
+        """
+- [Yahoo Finance](https://finance.yahoo.com/) for price, valuation, and company fundamentals
+- [yfinance Python library](https://pypi.org/project/yfinance/) for pulling Yahoo Finance data into the app
 - [Streamlit](https://streamlit.io/) for the app interface
-""")
+        """
+    )
 
     main_cols = [
         "Ticker", "Name", "Price", "52W High", "52W Low", "Pullback %", "P/E", "Forward P/E",
         "Revenue Growth %", "Earnings Growth %", "Profit Margin %", "Operating Margin %", "ROE %",
         "Debt to Equity", "Checklist Score", "Rating", "Signal", "My Note"
     ]
-    watchlist_df = df[[c for c in main_cols if c in df.columns]].copy().sort_values(by=["Checklist Score", "Pullback %"], ascending=[False, False])
+    watchlist_df = df[[c for c in main_cols if c in df.columns]].copy().sort_values(
+        by=["Checklist Score", "Pullback %"],
+        ascending=[False, False],
+    )
 
     st.markdown("**Tip:** Use fullscreen on the table if you want the widest possible view.")
     st.dataframe(
@@ -453,7 +455,12 @@ with tab1:
     )
 
     csv = watchlist_df.to_csv(index=False).encode("utf-8")
-    st.download_button("Download watchlist CSV", data=csv, file_name="daily_stock_watchlist.csv", mime="text/csv")
+    st.download_button(
+        "Download watchlist CSV",
+        data=csv,
+        file_name="daily_stock_watchlist.csv",
+        mime="text/csv",
+    )
 
 with tab2:
     st.subheader("One stock at a time")
@@ -542,5 +549,3 @@ st.markdown(
     "- Track your cost basis and position size\n"
     "- Add earnings dates and dividend yields"
 )
-
-# Save this file locally as: stock_dashboard_app.py
