@@ -280,21 +280,31 @@ def style_watchlist(df: pd.DataFrame):
 st.title("📈 Daily Stock Checklist")
 
 METRIC_DEFINITIONS = {
-    "Price": "Latest market price pulled from Yahoo Finance.",
-    "52W High": "Highest price reached in the last 52 weeks.",
-    "52W Low": "Lowest price reached in the last 52 weeks.",
-    "Pullback %": "How far the stock is below its 52-week high. Bigger pullbacks can mean a better entry, but not always.",
-    "P/E": "Trailing price-to-earnings ratio. Lower can be better, but growth stocks often deserve higher P/E.",
-    "Forward P/E": "Price compared with expected future earnings.",
-    "Revenue Growth %": "How fast sales are growing year over year.",
-    "Earnings Growth %": "How fast earnings are growing year over year.",
-    "Profit Margin %": "Percent of revenue that becomes profit. Higher is usually better.",
-    "Operating Margin %": "Profit from operations before some non-operating items. Higher is better.",
-    "ROE %": "Return on equity. Shows how efficiently the company uses shareholder capital.",
-    "Debt to Equity": "Debt relative to shareholder equity. Lower is usually safer.",
-    "Checklist Score": "A simple score based on growth, profitability, debt, valuation, and pullback.",
-    "Rating": "Overall quick label based on the checklist score.",
-    "Signal": "A shortlist signal based on your own rules in the sidebar.",
+    "Price": "Latest market price from Yahoo Finance. This is what the stock is trading at right now.",
+    "52W High": "Highest price the stock reached in the past 12 months. Used as a reference point for momentum and peaks.",
+    "52W Low": "Lowest price in the past 12 months. Helps understand downside range.",
+    "Pullback %": "Percent drop from 52-week high. Calculated as (High - Current)/High. Larger pullbacks (10–30%) can indicate better entry points IF the business is strong.",
+
+    "P/E": "Trailing Price-to-Earnings ratio (based on last 12 months earnings). Lower can mean cheaper, but high-growth companies often trade at higher P/E.",
+    "Forward P/E": "Price relative to expected future earnings (analyst estimates). Useful for growth stocks where future matters more than past.",
+
+    "Revenue Growth %": "Year-over-Year (YoY) revenue growth, NOT month-over-month. Measures how fast the company’s sales are increasing compared to last year. >20% = strong growth, 10–20% = good, <5% = slow.",
+    "Earnings Growth %": "Year-over-Year (YoY) growth in profits. Important because revenue without profit is not sustainable.",
+
+    "Profit Margin %": "Net profit as a % of revenue. Higher means the company keeps more money from sales. >20% = very strong, 10–20% = good, <5% = weak.",
+    "Operating Margin %": "Profit from core operations before taxes/interest. Helps compare companies across industries.",
+    "ROE %": "Return on Equity. Shows how efficiently a company uses investor money. >15% is generally strong.",
+
+    "Debt to Equity": "Total debt compared to shareholder equity. Lower = safer. <50 = low risk, 50–120 = moderate, >120 = high leverage.",
+
+    "Checklist Score": "Composite score combining growth, profitability, debt, valuation, and pullback. Higher score = stronger overall setup.",
+    "Rating": "Quick label based on score: Strong, Good, Mixed, Weak.",
+
+    "Signal": "Decision helper based on YOUR rules (P/E, growth, pullback). 
+- Buy zone = meets all conditions
+- Watch = close but not perfect
+- Quality = strong company but maybe expensive
+- Needs review = weaker setup",
 }
 
 def metric_legend_df() -> pd.DataFrame:
