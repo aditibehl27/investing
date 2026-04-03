@@ -232,7 +232,7 @@ def signal_from_rules(row: pd.Series, max_pe: float, min_growth: float, min_pull
     return "⚠️ Needs review"
 
 
-def style_watchlist(df: pd.DataFrame) -> pd.io.formats.style.Styler:
+def style_watchlist(df: pd.DataFrame):
     def color_signal(val: str) -> str:
         if "Buy zone" in str(val):
             return "background-color: #d1fae5"
@@ -251,7 +251,12 @@ def style_watchlist(df: pd.DataFrame) -> pd.io.formats.style.Styler:
             return "background-color: #fee2e2"
         return ""
 
-    return df.style.applymap(color_signal, subset=["Signal"]).applymap(color_rating, subset=["Rating"])
+    styler = df.style
+    if "Signal" in df.columns:
+        styler = styler.map(color_signal, subset=["Signal"])
+    if "Rating" in df.columns:
+        styler = styler.map(color_rating, subset=["Rating"])
+    return styler
 
 
 st.title("📈 Daily Stock Checklist")
