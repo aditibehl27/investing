@@ -268,7 +268,13 @@ def style_watchlist(df: pd.DataFrame):
     if "Signal" in df.columns:
         styler = styler.map(color_signal, subset=["Signal"])
     if "Rating" in df.columns:
-        styler = styler.map(color_rating, subset=["
+        styler = styler.map(color_rating, subset=["Rating"])
+
+    styler = styler.set_properties(**{
+        "white-space": "nowrap",
+        "font-size": "13px",
+    })
+    return styler
 
 
 st.title("📈 Daily Stock Checklist")
@@ -396,12 +402,43 @@ tab1, tab2, tab3, tab4 = st.tabs(["Watchlist", "Deep Dive", "Buy Signals", "How 
 
 with tab1:
     st.subheader("Main watchlist")
+
+    with st.expander("Metric definitions", expanded=True):
+        st.dataframe(metric_legend_df(), use_container_width=True, hide_index=True)
+
+    legend_df = pd.DataFrame(
+        [
+            {"Color": "Green", "Meaning": "Generally favorable / stronger"},
+            {"Color": "Yellow", "Meaning": "Mixed / okay / watch"},
+            {"Color": "Blue", "Meaning": "Neutral quality / wait"},
+            {"Color": "Red", "Meaning": "Weaker / expensive / riskier"},
+            {"Color": "Gray", "Meaning": "Missing or unavailable data"},
+        ]
+    )
+    st.markdown("**Color legend**")
+    st.dataframe(legend_df, use_container_width=True, hide_index=True)
+
+    st.markdown("**Sources**")
+    st.markdown("""
+- [Yahoo Finance](https://finance.yahoo.com/) for price, valuation, and company fundamentals  
+- [yfinance Python library](https://pypi.org/project/yfinance/) for pulling Yahoo Finance data into the app  
+- [Streamlit](https://streamlit.io/) for the app interface
+""")
+
     main_cols = [
-        "Ticker", "Name", "Price", "52W High", "Pullback %", "P/E", "Forward P/E",
-        "Revenue Growth %", "Profit Margin %", "Debt to Equity", "Checklist Score", "Rating", "Signal", "My Note"
+        "Ticker", "Name", "Price", "52W High", "52W Low", "Pullback %", "P/E", "Forward P/E",
+        "Revenue Growth %", "Earnings Growth %", "Profit Margin %", "Operating Margin %", "ROE %",
+        "Debt to Equity", "Checklist Score", "Rating", "Signal", "My Note"
     ]
     watchlist_df = df[[c for c in main_cols if c in df.columns]].copy().sort_values(by=["Checklist Score", "Pullback %"], ascending=[False, False])
-    st.dataframe(style_watchlist(watchlist_df), use_container_width=True, hide_index=True)
+
+    st.markdown("**Tip:** Use fullscreen on the table if you want the widest possible view.")
+    st.dataframe(
+        style_watchlist(watchlist_df),
+        use_container_width=True,
+        hide_index=True,
+        height=min(900, 45 * (len(watchlist_df) + 1) + 40),
+    )
 
     csv = watchlist_df.to_csv(index=False).encode("utf-8")
     st.download_button("Download watchlist CSV", data=csv, file_name="daily_stock_watchlist.csv", mime="text/csv")
