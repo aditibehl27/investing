@@ -304,7 +304,7 @@ METRIC_DEFINITIONS = {
 - Buy zone = meets all conditions
 - Watch = close but not perfect
 - Quality = strong company but maybe expensive
-- Needs review = weaker setup""","}]}
+- Needs review = weaker setu}]}
 }
 
 def metric_legend_df() -> pd.DataFrame:
