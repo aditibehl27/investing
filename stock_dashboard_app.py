@@ -304,7 +304,7 @@ METRIC_DEFINITIONS = {
 - Buy zone = meets all conditions
 - Watch = close but not perfect
 - Quality = strong company but maybe expensive
-- Needs review = weaker setup"""
+- Needs review = weaker setup""","}]}
 }
 
 def metric_legend_df() -> pd.DataFrame:
@@ -414,7 +414,9 @@ with tab1:
     st.subheader("Main watchlist")
 
     with st.expander("Metric definitions", expanded=True):
-        st.dataframe(metric_legend_df(), use_container_width=True, hide_index=True)
+        defs_df = metric_legend_df().copy()
+        defs_df["What it means"] = defs_df["What it means"].astype(str)
+        st.table(defs_df)
 
     legend_df = pd.DataFrame(
         [
