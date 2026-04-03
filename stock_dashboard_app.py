@@ -235,31 +235,120 @@ def signal_from_rules(row: pd.Series, max_pe: float, min_growth: float, min_pull
 def style_watchlist(df: pd.DataFrame):
     def color_signal(val: str) -> str:
         if "Buy zone" in str(val):
-            return "background-color: #d1fae5"
+            return "background-color: #dcfce7; color: #166534"
         if "Watch closely" in str(val):
-            return "background-color: #fef3c7"
+            return "background-color: #fef9c3; color: #854d0e"
+        if "Quality, maybe wait" in str(val):
+            return "background-color: #e0f2fe; color: #075985"
         if "Needs review" in str(val):
-            return "background-color: #fee2e2"
+            return "background-color: #fee2e2; color: #991b1b"
         return ""
 
     def color_rating(val: str) -> str:
         if val == "Strong":
-            return "background-color: #dcfce7"
+            return "background-color: #dcfce7; color: #166534"
         if val == "Good":
-            return "background-color: #fef9c3"
+            return "background-color: #fef9c3; color: #854d0e"
+        if val == "Mixed":
+            return "background-color: #e0f2fe; color: #075985"
         if val == "Weak":
-            return "background-color: #fee2e2"
+            return "background-color: #fee2e2; color: #991b1b"
         return ""
 
     styler = df.style
+
+    for col in df.columns:
+        if col in [
+            "P/E", "Forward P/E", "Revenue Growth %", "Earnings Growth %",
+            "Profit Margin %", "Operating Margin %", "ROE %", "Debt to Equity",
+            "Pullback %", "Checklist Score"
+        ]:
+            styler = styler.map(lambda v, c=col: color_metric(v, c), subset=[col])
+
     if "Signal" in df.columns:
         styler = styler.map(color_signal, subset=["Signal"])
     if "Rating" in df.columns:
-        styler = styler.map(color_rating, subset=["Rating"])
-    return styler
+        styler = styler.map(color_rating, subset=["
 
 
 st.title("📈 Daily Stock Checklist")
+
+METRIC_DEFINITIONS = {
+    "Price": "Latest market price pulled from Yahoo Finance.",
+    "52W High": "Highest price reached in the last 52 weeks.",
+    "52W Low": "Lowest price reached in the last 52 weeks.",
+    "Pullback %": "How far the stock is below its 52-week high. Bigger pullbacks can mean a better entry, but not always.",
+    "P/E": "Trailing price-to-earnings ratio. Lower can be better, but growth stocks often deserve higher P/E.",
+    "Forward P/E": "Price compared with expected future earnings.",
+    "Revenue Growth %": "How fast sales are growing year over year.",
+    "Earnings Growth %": "How fast earnings are growing year over year.",
+    "Profit Margin %": "Percent of revenue that becomes profit. Higher is usually better.",
+    "Operating Margin %": "Profit from operations before some non-operating items. Higher is better.",
+    "ROE %": "Return on equity. Shows how efficiently the company uses shareholder capital.",
+    "Debt to Equity": "Debt relative to shareholder equity. Lower is usually safer.",
+    "Checklist Score": "A simple score based on growth, profitability, debt, valuation, and pullback.",
+    "Rating": "Overall quick label based on the checklist score.",
+    "Signal": "A shortlist signal based on your own rules in the sidebar.",
+}
+
+def metric_legend_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        [{"Metric": k, "What it means": v} for k, v in METRIC_DEFINITIONS.items()]
+    )
+
+
+def color_metric(val: Any, column: str) -> str:
+    if val is None or val == "N/A" or (isinstance(val, float) and math.isnan(val)):
+        return "background-color: #f3f4f6; color: #6b7280"
+
+    try:
+        num = float(val)
+    except Exception:
+        return ""
+
+    if column in ["Revenue Growth %", "Earnings Growth %"]:
+        if num >= 20:
+            return "background-color: #dcfce7; color: #166534"
+        if num >= 8:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column in ["Profit Margin %", "Operating Margin %", "ROE %"]:
+        if num >= 20:
+            return "background-color: #dcfce7; color: #166534"
+        if num >= 8:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column == "Debt to Equity":
+        if num < 50:
+            return "background-color: #dcfce7; color: #166534"
+        if num < 120:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column in ["P/E", "Forward P/E"]:
+        if num < 20:
+            return "background-color: #dcfce7; color: #166534"
+        if num < 35:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column == "Pullback %":
+        if num >= 20:
+            return "background-color: #dcfce7; color: #166534"
+        if num >= 8:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    if column == "Checklist Score":
+        if num >= 22:
+            return "background-color: #dcfce7; color: #166534"
+        if num >= 16:
+            return "background-color: #fef9c3; color: #854d0e"
+        return "background-color: #fee2e2; color: #991b1b"
+
+    return ""
 st.caption("A simple investing dashboard that refreshes from Yahoo Finance and turns your watchlist into a daily checklist.")
 
 with st.sidebar:
